@@ -1,0 +1,4 @@
+default frame font = null
+default canDisplay CJK = false
+yahei font = Microsoft YaHei UI canDisplay CJK = true
+MENU_SHOWN

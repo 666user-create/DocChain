@@ -1,0 +1,115 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+group = 'com.docchain'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    maven { url 'https://maven.aliyun.com/repository/public' }
+    mavenCentral()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+javafx {
+    version = "21.0.6"
+    modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics', 'javafx.swing']
+}
+
+dependencies {
+    // JGit — 纯 Java 实现的 Git 操作库
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:6.10.0.202406032230-r'
+
+    // 日志框架
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+    implementation 'ch.qos.logback:logback-classic:1.5.12'
+
+    // 测试
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+application {
+    mainClass = 'com.docchain.MainApp'
+    // 确保 JavaFX 运行时参数正确传递
+    applicationDefaultJvmArgs = [
+        '--add-opens', 'javafx.graphics/com.sun.javafx.tk=ALL-UNNAMED',
+        '-Dprism.order=sw'
+    ]
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:unchecked'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// ═══════════════════════════════════════════════════════════
+// 打包 (.\gradlew.bat jpackage)
+// 输出: build/dist/DocChain/ (自带 JRE，双击 DocChain.exe 运行)
+// 无需 WiX，无需管理员权限
+// ═══════════════════════════════════════════════════════════
+
+task jpackage(type: Exec) {
+    group = 'distribution'
+    description = 'Create self-contained app image with bundled JRE'
+    dependsOn installDist
+
+    def javaHome = System.getProperty('java.home')
+    def runtimeDir = layout.buildDirectory.dir('runtime')
+    def installLib = layout.buildDirectory.dir("install/${project.name}/lib")
+    def distDir = layout.buildDirectory.dir('dist')
+    def mainJarName = "${project.name}-${project.version}.jar"
+
+    doFirst {
+        def javafxJars = configurations.runtimeClasspath.resolve()
+                .findAll { it.name.startsWith('javafx-') }
+                .collect { it.absolutePath }
+                .join(';')
+
+        def modules = ['java.base', 'java.desktop', 'java.naming',
+                       'java.management', 'jdk.crypto.ec',
+                       'javafx.controls', 'javafx.graphics', 'javafx.fxml', 'javafx.swing']
+
+        logger.lifecycle('[1/2] jlink...')
+        def runtimeFile = runtimeDir.get().asFile
+        if (runtimeFile.exists()) runtimeFile.deleteDir()
+        // jpackage 不允许输出目录已存在——先清理旧产物，保证本任务可重复执行
+        def distOut = distDir.get().asFile
+        if (distOut.exists()) distOut.deleteDir()
+        exec {
+            commandLine("${javaHome}/bin/jlink",
+                '--output', runtimeFile.absolutePath,
+                '--module-path', "${javaHome}/jmods;${javafxJars}",
+                '--add-modules', modules.join(','),
+                '--strip-debug', '--no-header-files', '--no-man-pages')
+        }
+
+        logger.lifecycle('[2/2] jpackage app-image...')
+    }
+
+    commandLine "${javaHome}/bin/jpackage",
+        '--type', 'app-image',
+        '--name', 'DocChain',
+        '--vendor', 'DocChain',
+        '--description', 'Silent document version manager',
+        '--input', installLib.get().asFile.absolutePath,
+        '--main-jar', mainJarName,
+        '--main-class', 'com.docchain.MainApp',
+        '--runtime-image', runtimeDir.get().asFile.absolutePath,
+        '--dest', distDir.get().asFile.absolutePath
+
+    doLast {
+        def output = distDir.get().asFile
+        logger.lifecycle('  Done → {}\\DocChain\\DocChain.exe', output.absolutePath)
+    }
+}

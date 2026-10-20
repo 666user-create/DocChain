@@ -1,0 +1,7 @@
+g2d font=Dialog.plain family=Dialog canDisplay=true
+g2d font=Microsoft Yahei UI family=Microsoft YaHei UI canDisplay=true
+g2d font=ËÎÌו family=ËÎÌו canDisplay=true
+g2d font=Arial family=Arial canDisplay=false
+IMAGE_WRITTEN
+item font (unset) = java.awt.Font[family=Microsoft YaHei UI,name=Microsoft YaHei UI,style=plain,size=13]
+MENU_SHOWN
